@@ -1,0 +1,27 @@
+# This file is used to build the infrastructure for a deployment.
+# After editing something here, apply the changes on the Diploi dashboard.
+# For more information, see https://diploi.com/yaml
+
+diploiVersion: v1.0
+components:
+  - name: React + Vite
+    identifier: react-vite
+    package: https://github.com/diploi/component-react-vite#v19.1.1
+    env:
+      include:
+        - mongo.*
+        - minio.*
+  - name: FastAPI
+    identifier: fastapi
+    package: https://github.com/diploi/component-fastapi#v0.116.1
+    env:
+      include:
+        - mongo.*
+        - minio.*
+addons:
+  - name: MinIO
+    identifier: minio
+    package: https://github.com/diploi/addon-minio#2025-06-13T11-33-47Z
+  - name: MongoDB
+    identifier: mongo
+    package: https://github.com/diploi/addon-mongo#v8.2.3
