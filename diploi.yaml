@@ -11,6 +11,7 @@ components:
       include:
         - mongo.*
         - minio.*
+        - fastapi.APP_ENDPOINT:API_ENDPOINT
   - name: FastAPI
     identifier: fastapi
     package: https://github.com/diploi/component-fastapi#v0.116.1

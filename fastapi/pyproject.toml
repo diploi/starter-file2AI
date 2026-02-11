@@ -6,4 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.116.1",
+    "openai>=2.15.0",
+    "python-multipart>=0.0.20",
+    "websockets>=15.0.1",
 ]

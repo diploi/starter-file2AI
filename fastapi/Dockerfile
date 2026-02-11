@@ -15,6 +15,8 @@ ENV UV_LINK_MODE=copy
 # Ensure installed tools can be executed out of the box
 ENV UV_TOOL_BIN_DIR=/usr/local/bin
 
+RUN apk add --no-cache ffmpeg
+
 COPY . /app
 RUN uv sync --locked --no-dev
 
