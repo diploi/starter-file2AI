@@ -67,7 +67,7 @@ export const FileUploader: React.FC = () => {
     let shouldReconnect = true;
 
     const connect = () => {
-      const wsUrl = `wss://my-dev-2--file2ai-yk98.diploi.me/ws?session_id=${sessionIdRef.current}`;
+      const wsUrl = `wss://api--file2ai.diploi.me/ws?session_id=${sessionIdRef.current}`;
       websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
@@ -363,7 +363,7 @@ export const FileUploader: React.FC = () => {
       console.log(formData.get('prompt'));
       console.log(formData.get('files'));
 
-      const response = await fetch('https://my-dev-2--file2ai-yk98.diploi.me/api/process', {
+      const response = await fetch('https://api--file2ai.diploi.me/api/process', {
         method: 'POST',
         body: formData,
       });
