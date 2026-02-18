@@ -15,6 +15,8 @@ export interface UseWebSocketReturn {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
+const wsRoot = import.meta.env.VITE_WS_ENDPOINT ? import.meta.env.VITE_WS_ENDPOINT :'wss://api--file2ai.diploi.me'
+
 export function useWebSocket(sessionId: string, storageKey: string): UseWebSocketReturn {
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(storageKey));
   const [isProcessing, setIsProcessing] = useState(false);
@@ -24,9 +26,8 @@ export function useWebSocket(sessionId: string, storageKey: string): UseWebSocke
   // WebSocket connection
   useEffect(() => {
     let websocket: WebSocket | null = null;
-
     const connect = () => {
-      const wsUrl = `wss://api--file2ai.diploi.me/ws?session_id=${sessionId}`;
+      const wsUrl = `${wsRoot}/ws?session_id=${sessionId}`;
       websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {

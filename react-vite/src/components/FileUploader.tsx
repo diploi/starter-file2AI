@@ -10,6 +10,8 @@ import { MediaControls } from './MediaControls';
 import { FileDropzone } from './FileDropzone';
 import { AttachedFileCard } from './AttachedFileCard';
 
+const api_endpoint = import.meta.env.VITE_API_ROOT_ENDPOINT ? `${import.meta.env.VITE_API_ROOT_ENDPOINT}/api/process` : 'https://api--file2ai.diploi.me/api/process'
+
 export const FileUploader: React.FC = () => {
   const sessionIdRef = useRef<string>(getSessionId());
   const storageKey = `messages_${sessionIdRef.current}`;
@@ -94,7 +96,8 @@ export const FileUploader: React.FC = () => {
         formData.append('files', attachedFile.file);
       }
 
-      const response = await fetch('https://api--file2ai.diploi.me/api/process', {
+
+      const response = await fetch(api_endpoint, {
         method: 'POST',
         body: formData,
       });
