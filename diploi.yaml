@@ -13,4 +13,10 @@ components:
   - name: FastAPI
     identifier: fastapi
     package: https://github.com/diploi/component-fastapi#v0.116.1
+    env: 
+      include:
+        - name: DIPLOI_AI_GATEWAY_URL
+          value: '{diploi-ai-gateway-url}'
+        - name: DIPLOI_AI_GATEWAY_TOKEN
+          value: '{diploi-ai-gateway-token}'
 addons: []

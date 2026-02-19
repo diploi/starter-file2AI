@@ -53,7 +53,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # Initialize OpenAI client
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("DIPLOI_AI_GATEWAY_TOKEN"), base_url=os.getenv("DIPLOI_AI_GATEWAY_URL"))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, session_id: str = ""):
@@ -298,7 +298,7 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
         }, websocket)
 
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4.1-nano",
             messages=messages,
             max_tokens=1000
         )
