@@ -15,7 +15,8 @@ export interface UseWebSocketReturn {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-const wsRoot = import.meta.env.VITE_WS_ENDPOINT ? import.meta.env.VITE_WS_ENDPOINT :'wss://api--file2ai.diploi.me'
+const api_endpoint = import.meta.env.VITE_API_ROOT_ENDPOINT || ''
+const wsRoot = api_endpoint.replace(/^http/, 'ws') || '';
 
 export function useWebSocket(sessionId: string, storageKey: string): UseWebSocketReturn {
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(storageKey));
