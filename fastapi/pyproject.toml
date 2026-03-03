@@ -1,5 +1,5 @@
 [project]
-name = "File2AI App"
+name = "file2ai-app"
 version = "0.1.0"
 description = "A powerful AI-driven app that analyzes uploaded files and extracts key information. Compatible with image, video, and audio formats."
 readme = "README.md"
