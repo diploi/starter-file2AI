@@ -9,6 +9,15 @@ import tempfile
 import subprocess
 from openai import AsyncOpenAI
 import base64
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -28,17 +37,20 @@ class ConnectionManager:
 
     async def connect(self, session_id: str, websocket: WebSocket):
         await websocket.accept()
+        logger.info(f"WebSocket connection accepted for session: {session_id}")
         # Replace stale connection for the same session (e.g. page refresh)
         old = self.active_connections.get(session_id)
         if old:
             try:
                 await old.close()
-            except Exception:
-                pass
+                logger.info(f"Closed stale connection for session: {session_id}")
+            except Exception as e:
+                logger.warning(f"Error closing stale connection for session {session_id}: {e}")
         self.active_connections[session_id] = websocket
 
     def disconnect(self, session_id: str):
         self.active_connections.pop(session_id, None)
+        logger.info(f"WebSocket disconnected for session: {session_id}")
 
     def get_connection(self, session_id: str) -> Optional[WebSocket]:
         return self.active_connections.get(session_id)
@@ -58,6 +70,7 @@ client = AsyncOpenAI(api_key=os.getenv("DIPLOI_AI_GATEWAY_TOKEN"), base_url=os.g
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, session_id: str = ""):
     if not session_id:
+        logger.warning("WebSocket connection rejected: missing session_id")
         await websocket.close(code=4000, reason="session_id query parameter required")
         return
 
@@ -67,10 +80,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = ""):
             data = await websocket.receive_text()
             await websocket.send_text(json.dumps({"type": "pong"}))
     except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for session: {session_id}")
+        manager.disconnect(session_id)
+    except Exception as e:
+        logger.error(f"WebSocket error for session {session_id}: {e}", exc_info=True)
         manager.disconnect(session_id)
 
 async def transcribe_audio(audio_bytes: bytes, filename: str, content_type: str) -> str:
     """Transcribe audio bytes using OpenAI Whisper API."""
+    logger.info(f"Starting audio transcription for file: {filename} ({content_type})")
     # Determine file extension from content type
     ext_map = {
         "audio/webm": ".webm",
@@ -92,11 +110,30 @@ async def transcribe_audio(audio_bytes: bytes, filename: str, content_type: str)
                 model="whisper-1",
                 file=audio_file,
             )
+            logger.info(f"Transcription completed for {filename}: {transcript}")
+            
+            # Handle DIPLOI AI Gateway's non-standard response format
+            # The gateway wraps the response in a 'result' field
+            if transcript.text is None and hasattr(transcript, 'result') and isinstance(transcript.result, dict):
+                text_content = transcript.result.get('text')
+                if text_content:
+                    logger.info(f"Extracted text from transcript.result: {text_content}")
+                    return text_content
+                else:
+                    logger.error(f"transcript.text is None and no text found in result for {filename}")
+                    raise ValueError(f"Transcription returned no text for {filename}")
+            elif transcript.text:
+                return transcript.text
+            else:
+                logger.error(f"transcript.text is None for {filename}. Full transcript: {transcript}")
+                raise ValueError(f"Transcription returned None for {filename}")
+    
     return transcript.text
 
 
 def extract_video_frames(video_bytes: bytes, content_type: str, max_frames: int = 4) -> List[bytes]:
     """Extract evenly-spaced frames from a video using ffmpeg."""
+    logger.info(f"Extracting {max_frames} frames from video ({content_type})")
     ext_map = {"video/webm": ".webm", "video/mp4": ".mp4", "video/quicktime": ".mov"}
     ext = ext_map.get(content_type, ".webm")
 
@@ -118,7 +155,9 @@ def extract_video_frames(video_bytes: bytes, content_type: str, max_frames: int 
             )
             try:
                 duration = float(probe.stdout.strip())
+                logger.debug(f"Video duration: {duration}s")
             except (ValueError, AttributeError):
+                logger.warning("Could not determine video duration, using fallback value")
                 duration = 10.0  # fallback
 
             # Calculate interval to get evenly-spaced frames
@@ -142,12 +181,13 @@ def extract_video_frames(video_bytes: bytes, content_type: str, max_frames: int 
                 with open(frame_path, "rb") as f:
                     frames.append(f.read())
 
+    logger.info(f"Successfully extracted {len(frames)} frames from video")
     return frames
 
 
 async def extract_video_audio(video_bytes: bytes, content_type: str) -> Optional[bytes]:
     """Extract audio track from a video file using ffmpeg."""
-    print(f'CONTENT TYPE {content_type}')
+    logger.info(f"Extracting audio from video ({content_type})")
     ext_map = {"video/webm": ".webm", "video/mp4": ".mp4", "video/quicktime": ".mov"}
     ext = ext_map.get(content_type, ".webm")
 
@@ -165,16 +205,18 @@ async def extract_video_audio(video_bytes: bytes, content_type: str) -> Optional
                 capture_output=True,
             )
             if result.returncode == 0 and os.path.getsize(tmp_audio.name) > 0:
+                audio_size = os.path.getsize(tmp_audio.name)
+                logger.info(f"Successfully extracted audio: {audio_size} bytes")
                 with open(tmp_audio.name, "rb") as f:
                     return f.read()
+            else:
+                logger.warning(f"Audio extraction failed or produced no output (return code: {result.returncode})")
     return None
 
 
 async def process_with_openai(prompt: str, files: List[UploadFile], websocket: WebSocket):
-    print('FILES BEING REVIEWED <<<<<<<<<<<<<<')
-    print('PARAMS RECEIVED <<<<<<<<<<<<<<')
+    logger.info(f"Processing request with prompt length: {len(prompt)} and {len(files)} files")
     try:
-        print('TRY CATCH BLOCK RUNNING>>>>>>>>>>>>>>>>>>>>>>.')
         # Send processing status
         await manager.send_personal_message({
             "type": "processing",
@@ -196,7 +238,7 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
             content = file['content']
             content_type = file['content_type'] or ''
             filename = file['filename']
-            print(f'Processing file: {filename} ({content_type})')
+            logger.info(f"Processing file: {filename} ({content_type}, {len(content)} bytes)")
 
             if content_type.startswith('image/'):
                 # Image: encode to base64 and send as image_url
@@ -221,14 +263,14 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
                         "text": f"\n\n[Audio transcription from {filename}]:\n{transcript}"
                     })
                 except Exception as e:
-                    print(f"Audio transcription failed: {e}")
+                    logger.error(f"Audio transcription failed for {filename}: {e}", exc_info=True)
                     messages[0]["content"].append({
                         "type": "text",
                         "text": f"\n\n[Audio file: {filename} — transcription failed: {str(e)}]"
                     })
 
             elif content_type.startswith('video/'):
-                print('VIDEO RECEIVED')
+                logger.info(f"Processing video file: {filename}")
                 # Video: extract frames as images + transcribe audio track
                 await manager.send_personal_message({
                     "type": "processing",
@@ -237,8 +279,6 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
 
                 # Extract and transcribe audio track
                 try:
-                    print('EXTRACTING AUDIO')
-                    print(f'CONTENT TYPE RECEIVED BEFORE EXTRACTION {content_type}')
                     audio_bytes = await extract_video_audio(content, content_type)
                     if audio_bytes:
                         transcript = await transcribe_audio(audio_bytes, filename, "audio/mpeg")
@@ -246,18 +286,22 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
                             "type": "text",
                             "text": f"\n\n[Audio transcription from video {filename}]:\n{transcript}"
                         })
+                    else:
+                        logger.info(f"No audio track found in video: {filename}")
                 except Exception as e:
-                    print(f"Video audio transcription failed: {e}")
+                    logger.error(f"Video audio transcription failed for {filename}: {e}", exc_info=True)
 
             else:
                 # Other files: try to decode as text
                 try:
                     text_content = content.decode('utf-8')
+                    logger.info(f"Decoded text file: {filename}")
                     messages[0]["content"].append({
                         "type": "text",
                         "text": f"\n\nFile: {filename}\n{text_content}"
                     })
                 except Exception:
+                    logger.info(f"Binary file cannot be decoded as text: {filename}")
                     messages[0]["content"].append({
                         "type": "text",
                         "text": f"\n\n[File: {filename} - Binary file, content not displayed]"
@@ -269,6 +313,7 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
             "content": "Generating response..."
         }, websocket)
 
+        logger.info("Calling OpenAI API for chat completion")
         response = await client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=messages,
@@ -277,13 +322,14 @@ async def process_with_openai(prompt: str, files: List[UploadFile], websocket: W
 
         # Send response back
         answer = response.choices[0].message.content
+        logger.info(f"OpenAI response received: {len(answer)} characters")
         await manager.send_personal_message({
             "type": "response",
             "content": answer
         }, websocket)
 
     except Exception as e:
-        print(f"Error processing with OpenAI: {str(e)}")
+        logger.error(f"Error processing with OpenAI: {str(e)}", exc_info=True)
         await manager.send_personal_message({
             "type": "error",
             "content": f"Error: {str(e)}"
@@ -299,11 +345,14 @@ async def process_files(
     Endpoint to receive files and prompt, then process with OpenAI.
     session_id correlates this request with the correct WebSocket connection.
     """
+    logger.info(f"Received process request for session: {session_id} with {len(files)} files")
     if not prompt and not files:
+        logger.warning(f"Invalid request from session {session_id}: missing prompt and files")
         raise HTTPException(status_code=400, detail="Prompt or files required")
 
     websocket = manager.get_connection(session_id)
     if not websocket:
+        logger.error(f"No WebSocket connection found for session: {session_id}")
         raise HTTPException(
             status_code=400,
             detail="No WebSocket connection found for this session. Please refresh and try again."
@@ -319,4 +368,5 @@ async def process_files(
         })
 
     asyncio.create_task(process_with_openai(prompt, file_data, websocket))
+    logger.info(f"Processing task created for session: {session_id}")
     return {"status": "processing", "message": "Request received"}
