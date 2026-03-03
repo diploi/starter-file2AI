@@ -6,7 +6,7 @@ previewImageUrls: [preview-1.jpg, preview-2.jpg]
 components:
   - name: React + Vite
     identifier: react-vite
-    folder: /
+    folder: /react-vite
     package: https://github.com/diploi/component-react-vite#v19.2.4-ports
     prebuildImage: public.ecr.aws/p8t2q7f4/diploi/starter-file2ai/react:[tag]
     env:
@@ -16,7 +16,7 @@ components:
           value: true
   - name: FastAPI
     identifier: fastapi
-    folder: /
+    folder: /fastapi
     package: https://github.com/diploi/component-fastapi#v0.128.0
     prebuildImage: public.ecr.aws/p8t2q7f4/diploi/starter-file2ai/fastapi:[tag]
     env: 
